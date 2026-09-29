@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/security_constants.dart';
 import '../../../core/errors/security_exceptions.dart';
 import '../../models/device_profile.dart';
@@ -14,15 +15,17 @@ typedef NetworkChecker = Future<bool> Function();
 /// local encrypted offline queue buffering, and privacy sanitization.
 class CloudProfileService implements ICloudProfileService {
   final ISecureStorageService secureStorage;
+  final FirebaseFirestore? firestore;
   final NetworkChecker? networkChecker;
   final StreamController<SyncStatus> _statusController =
       StreamController<SyncStatus>.broadcast();
 
-  // Internal document cache simulating Firestore collection locally
+  // Internal document cache simulating Firestore collection locally if live instance unavailable
   final Map<String, Map<String, dynamic>> _firestoreRemoteStore = {};
 
   CloudProfileService({
     required this.secureStorage,
+    this.firestore,
     this.networkChecker,
   });
 
@@ -124,6 +127,13 @@ class CloudProfileService implements ICloudProfileService {
     try {
       // Atomic upsert into Firestore collection: /devices/{deviceId}
       final doc = toFirestoreDocument(sanitized);
+      final liveFirestore = firestore;
+      if (liveFirestore != null) {
+        await liveFirestore
+            .collection('devices')
+            .doc(sanitized.deviceId)
+            .set(doc, SetOptions(merge: true));
+      }
       _firestoreRemoteStore[sanitized.deviceId] = doc;
       _statusController.add(SyncStatus.synced);
     } catch (e) {
@@ -136,6 +146,45 @@ class CloudProfileService implements ICloudProfileService {
 
   @override
   Future<DeviceProfile?> fetchDeviceProfile(String deviceId) async {
+    final liveFirestore = firestore;
+    if (liveFirestore != null) {
+      try {
+        final snap = await liveFirestore.collection('devices').doc(deviceId).get();
+        if (snap.exists && snap.data() != null) {
+          final data = snap.data()!;
+          return DeviceProfile(
+            deviceId: data['deviceId'] as String? ?? deviceId,
+            metadata: DeviceMetadata(
+              platform: data['platform'] as String? ?? 'unknown',
+              osVersion: data['osVersion'] as String? ?? 'unknown',
+              apiLevel: (data['apiLevel'] as num?)?.toInt() ?? 0,
+              deviceModel: data['deviceModel'] as String? ?? 'unknown',
+              manufacturer: data['manufacturer'] as String? ?? 'unknown',
+              hardwareArchitecture:
+                  data['hardwareArchitecture'] as String? ?? 'unknown',
+              isPhysical: data['isPhysical'] as bool? ?? true,
+              timestamp: DateTime.tryParse(data['lastSeen'] as String? ?? '') ??
+                  DateTime.now(),
+            ),
+            capabilityTier: CapabilityTier.values.firstWhere(
+              (t) => t.name == data['capabilityTier'],
+              orElse: () => CapabilityTier.legacy,
+            ),
+            lastSeen: DateTime.tryParse(data['lastSeen'] as String? ?? '') ??
+                DateTime.now(),
+            tamperFlags:
+                Map<String, dynamic>.from(data['tamperFlags'] as Map? ?? {}),
+            trackingStatus:
+                Map<String, dynamic>.from(data['trackingStatus'] as Map? ?? {}),
+            vaultMetadata:
+                Map<String, dynamic>.from(data['vaultMetadata'] as Map? ?? {}),
+          );
+        }
+      } catch (_) {
+        // Fallback to internal store if offline or error
+      }
+    }
+
     final doc = _firestoreRemoteStore[deviceId];
     if (doc == null) return null;
 
@@ -188,6 +237,13 @@ class CloudProfileService implements ICloudProfileService {
       try {
         final profile = DeviceProfile.fromMap(item);
         final doc = toFirestoreDocument(profile);
+        final liveFirestore = firestore;
+        if (liveFirestore != null) {
+          await liveFirestore
+              .collection('devices')
+              .doc(profile.deviceId)
+              .set(doc, SetOptions(merge: true));
+        }
         _firestoreRemoteStore[profile.deviceId] = doc;
       } catch (e) {
         remaining.add(item);

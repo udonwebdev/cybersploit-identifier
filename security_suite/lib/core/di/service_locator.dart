@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get_it/get_it.dart';
 
 import '../../data/models/device_profile.dart';
@@ -95,9 +96,19 @@ Future<void> setupServiceLocator({
     );
   } else {
     sl.registerLazySingleton<ICloudProfileService>(
-      () => CloudProfileService(
-        secureStorage: sl<ISecureStorageService>(),
-      ),
+      () {
+        FirebaseFirestore? fs;
+        try {
+          fs = FirebaseFirestore.instance;
+        } catch (_) {
+          // Firebase not initialized in headless unit test runner
+          fs = null;
+        }
+        return CloudProfileService(
+          secureStorage: sl<ISecureStorageService>(),
+          firestore: fs,
+        );
+      },
     );
   }
 

@@ -1,6 +1,8 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'core/di/service_locator.dart';
+import 'firebase_options.dart';
 import 'ui/viewmodels/dashboard_viewmodel.dart';
 import 'ui/viewmodels/settings_viewmodel.dart';
 import 'ui/viewmodels/threat_scanner_viewmodel.dart';
@@ -12,6 +14,14 @@ import 'ui/views/vault_view.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Firebase.initializeApp warning: $e');
+  }
+
   if (!sl.isRegistered<DashboardViewModel>()) {
     await setupServiceLocator();
   }
