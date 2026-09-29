@@ -1,0 +1,25 @@
+# Build artifacts
+build/
+**/build/
+.dart_tool/
+**/.dart_tool/
+.pub-cache/
+**/.pub-cache/
+.pub/
+**/.pub/
+
+# Secrets & local config
+*.env
+*.log
+.DS_Store
+
+# IDEs
+.idea/
+**/.idea/
+*.iml
+**/*.iml
+.vscode/
+**/.vscode/
+
+# Agent scratch
+.agents/
