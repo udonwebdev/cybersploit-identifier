@@ -23,7 +23,22 @@ class DashboardView extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Security Posture'),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/images/cybersploit_emblem.png',
+                    height: 28,
+                    width: 28,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text('Security Posture'),
+              ],
+            ),
             actions: [
               IconButton(
                 key: const Key('dashboard_refresh_button'),
