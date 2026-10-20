@@ -1,12 +1,14 @@
-import 'package:firebase_core/firebase_core.dart';
+﻿import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'core/di/service_locator.dart';
 import 'firebase_options.dart';
+import 'ui/viewmodels/auth_viewmodel.dart';
 import 'ui/viewmodels/dashboard_viewmodel.dart';
 import 'ui/viewmodels/settings_viewmodel.dart';
 import 'ui/viewmodels/threat_scanner_viewmodel.dart';
 import 'ui/viewmodels/vault_viewmodel.dart';
+import 'ui/views/auth_view.dart';
 import 'ui/views/dashboard_view.dart';
 import 'ui/views/settings_view.dart';
 import 'ui/views/threat_scanner_view.dart';
@@ -19,7 +21,7 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
-    debugPrint('Firebase.initializeApp warning: $e');
+    debugPrint('Firebase.initializeApp warning: ');
   }
 
   if (!sl.isRegistered<DashboardViewModel>()) {
@@ -54,7 +56,7 @@ class SecuritySuiteApp extends StatelessWidget {
           brightness: Brightness.dark,
         ),
       ),
-      home: const MainNavigationShell(),
+      home: const AuthGate(),
     );
   }
 }
@@ -66,6 +68,43 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const SecuritySuiteApp();
+  }
+}
+
+/// Authenticated Gate guarding the primary security navigation shell.
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  late final AuthViewModel _authViewModel;
+
+  @override
+  void initState() {
+    super.initState();
+    _authViewModel = sl<AuthViewModel>();
+  }
+
+  @override
+  void dispose() {
+    _authViewModel.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: _authViewModel,
+      builder: (context, _) {
+        if (_authViewModel.isAuthenticated) {
+          return const MainNavigationShell();
+        }
+        return AuthView(viewModel: _authViewModel);
+      },
+    );
   }
 }
 

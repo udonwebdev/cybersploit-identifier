@@ -1,10 +1,12 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get_it/get_it.dart';
 
 import '../../data/models/device_profile.dart';
 import '../../data/repositories/background_security_repository.dart';
 import '../../data/repositories/device_repository.dart';
 import '../../data/repositories/vault_repository.dart';
+import '../../data/services/contracts/i_auth_service.dart';
 import '../../data/services/contracts/i_background_trigger_service.dart';
 import '../../data/services/contracts/i_biometric_auth_service.dart';
 import '../../data/services/contracts/i_cloud_profile_service.dart';
@@ -13,6 +15,7 @@ import '../../data/services/contracts/i_location_platform_service.dart';
 import '../../data/services/contracts/i_secure_storage_service.dart';
 import '../../data/services/contracts/i_threat_scanner_service.dart';
 import '../../data/services/contracts/i_vault_crypto_service.dart';
+import '../../data/services/fakes/fake_auth_service.dart';
 import '../../data/services/fakes/fake_background_trigger_service.dart';
 import '../../data/services/fakes/fake_biometric_auth_service.dart';
 import '../../data/services/fakes/fake_cloud_profile_service.dart';
@@ -26,11 +29,13 @@ import '../../data/services/implementations/aes_gcm_vault_crypto_service.dart';
 import '../../data/services/implementations/cloud_profile_service.dart';
 import '../../data/services/implementations/device_identity_service.dart';
 import '../../data/services/implementations/event_driven_background_service.dart';
+import '../../data/services/implementations/firebase_auth_service.dart';
 import '../../data/services/implementations/local_auth_biometric_service.dart';
 import '../../data/services/implementations/location_platform_service.dart';
 import '../../data/services/implementations/secure_storage_service.dart';
 
 import '../../data/repositories/security_posture_repository.dart';
+import '../../ui/viewmodels/auth_viewmodel.dart';
 import '../../ui/viewmodels/dashboard_viewmodel.dart';
 import '../../ui/viewmodels/settings_viewmodel.dart';
 import '../../ui/viewmodels/threat_scanner_viewmodel.dart';
@@ -42,6 +47,7 @@ final GetIt sl = GetIt.instance;
 /// Supports running with in-memory fakes for headless testing or production implementations.
 Future<void> setupServiceLocator({
   bool useFakes = false,
+  IAuthService? customAuthService,
   ISecureStorageService? customStorageService,
   IDeviceIdentityService? customIdentityService,
   ICloudProfileService? customCloudService,
@@ -55,6 +61,23 @@ Future<void> setupServiceLocator({
   DeviceMetadata? mockMetadata,
 }) async {
   await resetServiceLocator();
+
+  // 0. Authentication Service
+  if (customAuthService != null) {
+    sl.registerLazySingleton<IAuthService>(() => customAuthService);
+  } else if (useFakes) {
+    sl.registerLazySingleton<IAuthService>(() => FakeAuthService());
+  } else {
+    sl.registerLazySingleton<IAuthService>(() {
+      FirebaseAuth? fa;
+      try {
+        fa = FirebaseAuth.instance;
+      } catch (_) {
+        fa = null;
+      }
+      return fa != null ? FirebaseAuthService(firebaseAuth: fa) : FakeAuthService();
+    });
+  }
 
   // 1. Secure Storage Service
   if (customStorageService != null) {
@@ -101,7 +124,6 @@ Future<void> setupServiceLocator({
         try {
           fs = FirebaseFirestore.instance;
         } catch (_) {
-          // Firebase not initialized in headless unit test runner
           fs = null;
         }
         return CloudProfileService(
@@ -225,7 +247,13 @@ Future<void> setupServiceLocator({
     () => sl<ISecurityPostureRepository>() as SecurityPostureRepository,
   );
 
-  // 11. ViewModels (Factory registration for clean lifecycle)
+  // 11. ViewModels
+  sl.registerFactory<AuthViewModel>(
+    () => AuthViewModel(
+      authService: sl<IAuthService>(),
+    ),
+  );
+
   sl.registerFactory<DashboardViewModel>(
     () => DashboardViewModel(
       postureRepository: sl<ISecurityPostureRepository>(),

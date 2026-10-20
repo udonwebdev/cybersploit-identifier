@@ -1,12 +1,22 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:security_suite/core/di/service_locator.dart';
+import 'package:security_suite/data/services/contracts/i_auth_service.dart';
+import 'package:security_suite/data/services/fakes/fake_auth_service.dart';
 import 'package:security_suite/main.dart';
 
 void main() {
   setUp(() async {
-    await setupServiceLocator(useFakes: true);
+    // Inject pre-authenticated fake user so existing navigation integration tests continue to pass seamlessly
+    final fakeAuth = FakeAuthService(
+      initialUser: const AuthUser(
+        uid: 'test_operator_uid',
+        email: 'operator@cybersploi.com',
+        isEmailVerified: true,
+      ),
+    );
+    await setupServiceLocator(useFakes: true, customAuthService: fakeAuth);
   });
 
   tearDown(() async {
